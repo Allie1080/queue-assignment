@@ -331,7 +331,7 @@ public:
 };
 
 int main () {
-    char prompt;
+    std::string prompt;
     Queue ticketQueue(999);
     std::string name;
     std::string searchRequest;
@@ -339,6 +339,8 @@ int main () {
     int position;
     
     std::cout << "WELCOME TO OLIVIA RODRIGO'S CONCERT TICKETING SYSTEM" << '\n';
+    std::cout << "====================================================" << '\n';
+    std::cout << '\n';
     delayFor(500);
     std::cout << "1. Enqueue a person" << '\n';
     delayFor(50);
@@ -353,16 +355,24 @@ int main () {
     std::cout << '\n';
     std::cout << '\n';
 
-    while (prompt != '5') {
+    while (prompt[0] != '5') {
         std::cout << "Choose an option: " << '\n' << ">> ";
-        std::cin >> prompt;
+        getline(std::cin, prompt);
         std::cout << '\n';
         ticketQueue.updateQueue();
 
-        switch(prompt) {
+        if (prompt.size() > 1) {
+            std::cout << "ERROR" << '\n';
+            std::cout << "Not a valid option!" << '\n';
+            std::cout << '\n';
+
+            continue;
+        }
+
+        switch(prompt[0]) {
             case '1':
                 std::cout << "Enter the name: " << '\n' << ">> ";
-                std::cin >> name;
+                getline(std::cin, name);
                 std::cout << '\n';
 
                 delayFor(150);
@@ -371,7 +381,7 @@ int main () {
 
             case '2':
                 std::cout << "Enter your name or ticket number: " << '\n' << ">> ";
-                std::cin >>  searchRequest;
+                getline(std::cin, searchRequest);
                 std::cout << '\n';
 
                 ticketSearchRequest = (isdigit(searchRequest)) ? convertStringToInt(searchRequest) : -1;  
@@ -382,7 +392,8 @@ int main () {
                     std::cout << ticketQueue.findTicket(position) << " is currently at position " << position << " of the queue." << '\n';
 
                 } else {
-                    std::cout << "Unable to find ticket " << '\n';
+                    std::cout << "ERROR" << '\n';
+                    std::cout << "Unable to find ticket!" << '\n';
 
                 }
 
@@ -406,7 +417,7 @@ int main () {
             default:
                 std::cout << "ERROR" << '\n';
                 delayFor(150);
-                std::cout << "Not a valid option" << '\n';
+                std::cout << "Not a valid option!" << '\n';
                 break;
 
         }
