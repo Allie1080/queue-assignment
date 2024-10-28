@@ -6,10 +6,37 @@
 #include <ctime>
 #include <thread>
 
-const std::chrono::duration<double> timeLimit{10.0};
+const std::chrono::duration<double> timeLimit{60.0};
+// you can change this if you want
 
 void delayFor (int milliseconds) {
     std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+
+bool isdigit (std::string text) {
+    for (int index{0}; index < text.size(); index++) {
+        if (!isdigit(text[index])) {
+            return false;
+        
+        }
+    }
+
+    return true;
+}
+
+int convertStringToInt(std::string text) {
+    int number{0};
+
+    if (!isdigit(text)) {
+        return -1;
+    
+    }
+
+    for (int index{0}; index < text.size(); index++) {
+        number = number*10 + (static_cast<int>(text[index]) - 48);
+    }
+
+    return number;
 }
 
 class Person {
@@ -18,6 +45,9 @@ private:
     int ticketNumber;
     // starts at 0, but display() starts at 1
     std::chrono::time_point<std::chrono::system_clock> ticketCreationTime;
+    // i thouught tickets were to be dequeued 1 minute after creation, not every minute
+    // whatever, its cool
+    // you can toggle it in the .updateQueue somewhere around line 336
 
 public:
     
@@ -31,6 +61,7 @@ public:
     }
 
     bool isDue () {
+        // std::cout << name << ": " << (std::chrono::system_clock::now() - ticketCreationTime).count() << '\n';
         return (std::chrono::system_clock::now() - ticketCreationTime) >= timeLimit;
     }
 
@@ -56,7 +87,7 @@ public:
             ticketNumberCopy /= 10;
         }
 
-        ticket << "(Ticket #";
+        ticket << "Ticket #";
         
         if (ticketNumberDigits == 1) {
             ticket << "00" << (ticketNumber + 1);
@@ -69,8 +100,6 @@ public:
 
         }
 
-        ticket << ")";
-
         return ticket.str();
 
     }
@@ -79,7 +108,7 @@ public:
         // sample output: "Alice (#001)"
         std::ostringstream personInformation;
 
-        personInformation << name << " " << getFormattedTicketNumber();
+        personInformation << name << " (" << getFormattedTicketNumber() << ")";
 
         return personInformation.str();
     }
@@ -96,6 +125,10 @@ private:
 
     int lastTicketNumber;
 
+    std::chrono::time_point<std::chrono::system_clock> creationTime;
+    std::chrono::time_point<std::chrono::system_clock> timeOfLastDequeue;
+    int totalMinutesPassed;
+
 public:
     Queue (int cap) {
         rear  = -1;
@@ -104,6 +137,10 @@ public:
         queue = new Person[capacity];
 
         lastTicketNumber = 0;
+
+        creationTime = std::chrono::system_clock::now();
+        timeOfLastDequeue = creationTime;
+        totalMinutesPassed = 0;
     }   
     
     ~Queue () {
@@ -142,21 +179,36 @@ public:
         return 0;
     }
 
-    std::string peek () {
+    void peek () {
         if (isEmpty()) {
-            return "-1";
+            std::cout << "[QUEUE EMPTY]" << '\n';
 
-        } 
+        } else {
+            std::cout << queue[front].getName() << " is at the front of the line with " << queue[front].getFormattedTicketNumber() << '\n';  
+
+        }
+    }
+
+    void displayEnqueueMessage (int enqueueExitCode) {
+        if (enqueueExitCode == 0) {
+        std::cout << queue[rear].getName() << " has been added to the queue with " << queue[rear].getFormattedTicketNumber() << '\n';  
+
+        } else {
+            std::cout << "QUEUE IS FULL" << '\n';
         
-        return queue[front].getTicket();
+        }
+    }
+
+    int size () {
+        return rear + 1;
     }
 
     void displaySize () {
         if (isEmpty()) {
-            std::cout << "QUEUE EMPTY" << '\n';
+            std::cout << "[QUEUE EMPTY]" << '\n';
         
         } else {
-            std::cout << "QUEUE SIZE: " << (rear + 1) << '\n';
+            std::cout << "[QUEUE SIZE: " << size() << "]" << '\n';
 
         } 
     }
@@ -171,11 +223,12 @@ public:
         }
 
         displaySize();
-        std::cout << '\n';
     }
     
     int findPosition (int ticketNumber) {
         for (int index = front; index <= rear; index++) {
+            // std::cout << ticketNumber << " == " << queue[index].getRawTicketNumber() << " is " << (ticketNumber == queue[index].getRawTicketNumber()) << '\n';
+
             if ((ticketNumber - 1) == queue[index].getRawTicketNumber()) {
                 return index + 1;
 
@@ -188,6 +241,8 @@ public:
 
     int findPosition (std::string name) {
         for (int index = front; index <= rear; index++) {
+            // std::cout << name << " == " << queue[index].getName() << " is " << (name == queue[index].getName());
+            
             if (name == queue[index].getName()) {
                 return index + 1;
             }
@@ -197,15 +252,51 @@ public:
         // not found
     }
 
-    void updateQueue () {
-        bool thereIsUpdate{false};
+    std::string findTicket (int position) {
+        if (position < 0) {
+            return "\0";
+        }
+
+        return queue[position - 1].getTicket();
+    }
+
+    int countDequeueAndAnnounceEveryMinute () {
+        int minutesPassed = ((std::chrono::system_clock::now() - timeOfLastDequeue) / timeLimit);
+        int amountToDequeue = minutesPassed;
+
+        amountToDequeue = (amountToDequeue > size()) ? size() : amountToDequeue;
+        // since nothing is actually being dequed at this stage, we need to manually match amountToDequeue to size()
+        // otherwise, the program would announce the dequeuement of the final item multiple times 
+
+        if (amountToDequeue == 0) {
+            return amountToDequeue;
+        }
+
+        std::cout << minutesPassed << ((minutesPassed > 1) ? " minutes" : " minute") << " has passed..." << '\n';
+        delayFor(300);
+
+        for (int index{0}; index < amountToDequeue; index++) {
+            if (isEmpty()) {
+                break;
+            
+            }
+            
+            std::cout << "DEQUEUE: " << queue[index].getName() << " has received a ticket (" << queue[index].getFormattedTicketNumber() << ")" << '\n';
+            delayFor(300);
+        }
+
+        
+        timeOfLastDequeue = std::chrono::system_clock::now();
+        return amountToDequeue;
+    }
+
+    int countDequeueAndAnnouncePerIndividualTicketClock () {
+        int amountToDequeue{0};
 
         for (int index{0}; index <= rear; index++) {
             if (queue[index].isDue()) {
-                thereIsUpdate = true;
-
-                std::cout << "DEQUEUE: " << queue[index].getName() << " has received a ticket " << queue[index].getFormattedTicketNumber() << '\n';
-                dequeue();
+                std::cout << "DEQUEUE: " << queue[index].getName() << " has received a ticket (" << queue[index].getFormattedTicketNumber() << ")" << '\n';
+                amountToDequeue++;
                 delayFor(300);
             
             } else {
@@ -214,42 +305,140 @@ public:
             }
 
         }
+        
+        return amountToDequeue;
+    }
 
-        if (thereIsUpdate) {
-            displaySize();
-            std::cout << '\n';
+    void updateQueue (bool useOriginalDequeueingCounter=false) {
+        bool thereIsUpdate{false};
+        int amountToDequeue = (!useOriginalDequeueingCounter) ? countDequeueAndAnnounceEveryMinute() : countDequeueAndAnnouncePerIndividualTicketClock() ;
 
+        if (amountToDequeue == 0) {
+            return;
         }
+
+        for (int counter{1}; counter <= amountToDequeue; counter++) {
+            if (isEmpty()) {
+                break;
+            }
+            dequeue();
+            // shouldnt dequeue iterating over queue
+        }
+        displaySize();
+        std::cout << '\n';
     }
         
 };
 
-
 int main () {
-    Person Alice("Alice", 100);
-    int wait;
-    std::chrono::time_point<std::chrono::system_clock> currentTime;
+    char prompt;
+    Queue ticketQueue(999);
+    std::string name;
+    std::string searchRequest;
+    int ticketSearchRequest;
+    int position;
+    
+    std::cout << "WELCOME TO OLIVIA RODRIGO'S CONCERT TICKETING SYSTEM" << '\n';
+    delayFor(500);
+    std::cout << "1. Enqueue a person" << '\n';
+    delayFor(50);
+    std::cout << "2. Check your position in the queue" << '\n';
+    delayFor(50);
+    std::cout << "3. Peek entire line" << '\n';
+    delayFor(50);
+    std::cout << "4. Peek the front of the line" << '\n';
+    delayFor(50);
+    std::cout << "5. Exit" << '\n';
+    delayFor(50);
+    std::cout << '\n';
+    std::cout << '\n';
 
-    Queue ticketLine(999);
+    while (prompt != '5') {
+        std::cout << "Choose an option: " << '\n' << ">> ";
+        std::cin >> prompt;
+        std::cout << '\n';
+        ticketQueue.updateQueue();
 
-    ticketLine.enqueue("Lisa");
-    ticketLine.enqueue("Allaine");
-    ticketLine.enqueue("Lua");
-    ticketLine.enqueue("Ruby");
-    ticketLine.displayTickets();
+        switch(prompt) {
+            case '1':
+                std::cout << "Enter the name: " << '\n' << ">> ";
+                std::cin >> name;
+                std::cout << '\n';
 
-    ticketLine.dequeue();
-    ticketLine.displayTickets();
+                delayFor(150);
+                ticketQueue.displayEnqueueMessage(ticketQueue.enqueue(name));
+                break;
+
+            case '2':
+                std::cout << "Enter your name or ticket number: " << '\n' << ">> ";
+                std::cin >>  searchRequest;
+                std::cout << '\n';
+
+                ticketSearchRequest = (isdigit(searchRequest)) ? convertStringToInt(searchRequest) : -1;  
+                position = (ticketSearchRequest != -1) ? ticketQueue.findPosition(ticketSearchRequest) : ticketQueue.findPosition(searchRequest);
+                
+                delayFor(150);
+                if (position != -1) {
+                    std::cout << ticketQueue.findTicket(position) << " is currently at position " << position << " of the queue." << '\n';
+
+                } else {
+                    std::cout << "Unable to find ticket " << '\n';
+
+                }
+
+                break;
+            
+            case '3':
+                delayFor(150);
+                ticketQueue.peek();
+                break;
+
+            case '4':
+                delayFor(150);
+                std::cout << "CURRENT QUEUE:" << '\n';
+                delayFor(300);
+                ticketQueue.displayTickets();
+                break;
+
+            case '5': 
+                break;
+
+            default:
+                std::cout << "ERROR" << '\n';
+                delayFor(150);
+                std::cout << "Not a valid option" << '\n';
+                break;
+
+        }
+
+        std::cout << '\n';
+
+    }
+
+    // Person Alice("Alice", 100);
+    // int wait;
+    // std::chrono::time_point<std::chrono::system_clock> currentTime;
+
+    // Queue ticketLine(999);
+
+    // ticketLine.enqueue("Lisa");
+    // ticketLine.enqueue("Allaine");
+    // ticketLine.enqueue("Lua");
+    // ticketLine.enqueue("Ruby");
+    // ticketLine.displayTickets();
+
+    // ticketLine.dequeue();
+    // ticketLine.displayTickets();
 
 
-    std::cin >> wait;
-    currentTime = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsedTime = currentTime - Alice.getTicketCreationTime();
+    // std::cin >> wait;
+    // currentTime = std::chrono::system_clock::now();
+    // std::chrono::duration<double> elapsedTime = currentTime - Alice.getTicketCreationTime();
 
-    ticketLine.updateQueue();
+    // ticketLine.updateQueue();
 
-    std::cout << "Elapsed time: " << elapsedTime.count() << '\n';
-    // std::cout << "Position of Ticket Number 3: " << ticketLine.findPosition(3) << '\n';
+    // std::cout << "Elapsed time: " << elapsedTime.count() << '\n';
+    // // std::cout << "Position of Ticket Number 3: " << ticketLine.findPosition(3) << '\n';
     // std::cout << "Position of Ruby: " << ticketLine.findPosition("Ruby") << '\n';
     // std::cout << "Position of Lua: " << ticketLine.findPosition("Lua") << '\n';
     // std::cout << "Position of Lisa: " << ticketLine.findPosition("Lisa") << '\n';
